@@ -13,6 +13,8 @@ build/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.eggs/
 .venv/
 venv/
 .pytest_cache/
