@@ -15,6 +15,7 @@ def test_settings_defaults():
     assert settings.postgres_user == "mindmesh"
     assert settings.postgres_password == "mindmesh_secret"
     assert settings.database_url == "postgresql://mindmesh:mindmesh_secret@localhost:5432/mindmesh"
+    assert settings.async_database_url == "postgresql+psycopg://mindmesh:mindmesh_secret@localhost:5432/mindmesh"
 
 
 def test_settings_custom_values():
@@ -44,3 +45,4 @@ def test_settings_custom_values():
     assert settings.postgres_user == "custom_user"
     assert settings.postgres_password == "custom_password"
     assert settings.database_url == "postgresql://custom_user:custom_password@db.internal:5433/custom_db"
+    assert settings.async_database_url == "postgresql+psycopg://custom_user:custom_password@db.internal:5433/custom_db"
