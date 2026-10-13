@@ -56,6 +56,7 @@ def _symbol_to_response(sym: CodeSymbol) -> CodeSymbolResponse:
         return_type=sym.return_type,
         complexity=sym.complexity,
         children=[_symbol_to_response(c) for c in sym.children],
+        base_classes=getattr(sym, "base_classes", []),
     )
 
 

@@ -48,6 +48,7 @@ class CodeSymbolResponse(BaseModel):
     return_type: Optional[str] = Field(default=None, description="Return type annotation if declared")
     complexity: int = Field(default=1, description="Cyclomatic complexity score")
     children: List["CodeSymbolResponse"] = Field(default_factory=list, description="Nested child symbols")
+    base_classes: List[str] = Field(default_factory=list, description="Base classes inherited by this class")
 
     model_config = ConfigDict(from_attributes=True)
 

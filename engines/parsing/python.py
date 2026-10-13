@@ -213,6 +213,8 @@ class PythonAstParser:
             elif isinstance(item, ast.ClassDef):
                 children.append(self._extract_class(item))
 
+        base_classes = [_safe_unparse(b) for b in node.bases if _safe_unparse(b)]
+
         return CodeSymbol(
             name=node.name,
             kind=SymbolKind.CLASS,
@@ -224,6 +226,7 @@ class PythonAstParser:
             return_type=None,
             complexity=1,
             children=children,
+            base_classes=base_classes,
         )
 
     def _extract_function(

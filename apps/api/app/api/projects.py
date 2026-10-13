@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.common import PaginatedResponse
+from app.schemas.graph import DependencyGraphResponse
 from app.schemas.ingestion import IngestionSummaryResponse
 from app.schemas.parsing import ProjectParseSummaryResponse
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.services.graph import GraphService
 from app.services.ingestion import IngestionService
 from app.services.parsing import ParsingService
 from app.services.projects import ProjectService
@@ -160,3 +162,18 @@ async def parse_project(
     """Parse codebase AST to extract classes, functions, methods, imports, and metrics."""
     service = ParsingService(session)
     return await service.parse_project(project_id)
+
+
+@router.post(
+    "/{project_id}/graph",
+    response_model=DependencyGraphResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate semantic dependency graph for project",
+)
+async def generate_project_graph(
+    project_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> DependencyGraphResponse:
+    """Generate semantic dependency graph with import, containment, and inheritance edges."""
+    service = GraphService(session)
+    return await service.build_project_graph(project_id)

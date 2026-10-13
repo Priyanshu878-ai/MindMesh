@@ -55,6 +55,7 @@ class CodeSymbol:
     return_type: Optional[str] = None
     complexity: int = 1
     children: List["CodeSymbol"] = field(default_factory=list)
+    base_classes: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

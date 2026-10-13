@@ -9,6 +9,12 @@ from app.schemas.parsing import (
     ParsedFileResponse,
     ProjectParseSummaryResponse,
 )
+from app.schemas.graph import (
+    DependencyGraphResponse,
+    GraphEdgeResponse,
+    GraphMetricsResponse,
+    GraphNodeResponse,
+)
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 __all__ = [
@@ -26,4 +32,8 @@ __all__ = [
     "ParseErrorResponse",
     "ParsedFileResponse",
     "ProjectParseSummaryResponse",
+    "GraphNodeResponse",
+    "GraphEdgeResponse",
+    "GraphMetricsResponse",
+    "DependencyGraphResponse",
 ]
