@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.common import PaginatedResponse
 from app.schemas.ingestion import IngestionSummaryResponse
+from app.schemas.parsing import ProjectParseSummaryResponse
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.ingestion import IngestionService
+from app.services.parsing import ParsingService
 from app.services.projects import ProjectService
 
 router = APIRouter()
@@ -143,3 +145,18 @@ async def ingest_project(
     """Trigger codebase ingestion scan for a local project."""
     service = IngestionService(session)
     return await service.ingest_project(project_id)
+
+
+@router.post(
+    "/{project_id}/parse",
+    response_model=ProjectParseSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Parse AST code intelligence for project",
+)
+async def parse_project(
+    project_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectParseSummaryResponse:
+    """Parse codebase AST to extract classes, functions, methods, imports, and metrics."""
+    service = ParsingService(session)
+    return await service.parse_project(project_id)
