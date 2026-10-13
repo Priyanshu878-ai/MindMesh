@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     postgres_user: str = "mindmesh"
     postgres_password: str = "mindmesh_secret"
 
+    # Local repository ingestion configuration
+    local_projects_root: str = ""
+    allowed_repo_roots: list[str] = []
+
     @property
     def database_url(self) -> str:
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_server}:{self.postgres_port}/{self.postgres_db}"

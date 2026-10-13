@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.common import PaginatedResponse
+from app.schemas.ingestion import IngestionSummaryResponse
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.services.ingestion import IngestionService
 from app.services.projects import ProjectService
 
 router = APIRouter()
@@ -126,3 +128,18 @@ async def delete_project(
         )
     await service.delete_project(project)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{project_id}/ingest",
+    response_model=IngestionSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Ingest codebase for project",
+)
+async def ingest_project(
+    project_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> IngestionSummaryResponse:
+    """Trigger codebase ingestion scan for a local project."""
+    service = IngestionService(session)
+    return await service.ingest_project(project_id)
