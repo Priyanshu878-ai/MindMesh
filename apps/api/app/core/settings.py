@@ -1,4 +1,8 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_SETTINGS_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SETTINGS_DIR.parents[2]
 
 
 class Settings(BaseSettings):
@@ -22,6 +26,20 @@ class Settings(BaseSettings):
     # Local repository ingestion configuration
     local_projects_root: str = ""
     allowed_repo_roots: list[str] = []
+    repositories_root: str = "data/repositories"
+
+    @property
+    def project_root(self) -> Path:
+        """The absolute canonical root directory of the MindMesh workspace."""
+        return _PROJECT_ROOT
+
+    def get_repositories_dir(self, create: bool = False) -> Path:
+        """The absolute canonical path to the dedicated managed repository workspace."""
+        raw = Path(self.repositories_root)
+        resolved = raw.resolve() if raw.is_absolute() else (self.project_root / raw).resolve()
+        if create:
+            resolved.mkdir(parents=True, exist_ok=True)
+        return resolved
 
     @property
     def database_url(self) -> str:

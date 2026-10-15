@@ -31,6 +31,9 @@ class IngestionService:
     def resolve_trusted_path(self, source_url: Optional[str]) -> Path:
         """Validate and resolve source_url against trusted local directory roots.
 
+        Canonicalizes paths, enforces strict containment within approved roots,
+        and prevents directory traversal and symlink escapes.
+
         Raises:
             HTTPException (400): If source_url is missing, outside trusted roots,
                                 or not an existing directory.
@@ -42,30 +45,64 @@ class IngestionService:
             )
 
         raw_path = Path(source_url.strip())
+        managed_workspace = self.settings.get_repositories_dir(create=True)
 
         # Determine allowed roots
         allowed: list[Path] = []
-        if self.allowed_roots:
+        if self.allowed_roots is not None:
+            # Explicit override provided by caller (e.g. test isolation)
             allowed.extend([p.resolve() for p in self.allowed_roots])
-        if self.settings.allowed_repo_roots:
-            allowed.extend([Path(p).resolve() for p in self.settings.allowed_repo_roots])
-        if self.settings.local_projects_root:
-            allowed.append(Path(self.settings.local_projects_root).resolve())
+        else:
+            if self.settings.allowed_repo_roots:
+                for p in self.settings.allowed_repo_roots:
+                    cand = Path(p)
+                    if cand.is_absolute():
+                        allowed.append(cand.resolve())
+                    else:
+                        allowed.append((self.settings.project_root / cand).resolve())
 
-        # If no specific roots are configured, default to current working directory
+            if self.settings.local_projects_root:
+                cand = Path(self.settings.local_projects_root)
+                if cand.is_absolute():
+                    allowed.append(cand.resolve())
+                else:
+                    allowed.append((self.settings.project_root / cand).resolve())
+
+            # Always register dedicated managed repository workspace
+            allowed.append(managed_workspace)
+
         if not allowed:
-            allowed.append(Path.cwd().resolve())
+            allowed.append(managed_workspace)
 
         # Resolve path
         if not raw_path.is_absolute():
             resolved_path = None
-            for root in allowed:
-                candidate = (root / raw_path).resolve()
-                if candidate.exists() and (candidate == root or candidate.is_relative_to(root)):
-                    resolved_path = candidate
-                    break
+
+            # 1. Check relative to managed workspace
+            cand_managed = (managed_workspace / raw_path).resolve()
+            if cand_managed.exists() and (cand_managed == managed_workspace or cand_managed.is_relative_to(managed_workspace)):
+                resolved_path = cand_managed
+
+            # 2. Check relative to any configured root
             if resolved_path is None:
-                resolved_path = (allowed[0] / raw_path).resolve()
+                for root in allowed:
+                    candidate = (root / raw_path).resolve()
+                    if candidate.exists() and (candidate == root or candidate.is_relative_to(root)):
+                        resolved_path = candidate
+                        break
+
+            # 3. Check relative to project root
+            if resolved_path is None:
+                cand_project = (self.settings.project_root / raw_path).resolve()
+                for root in allowed:
+                    if cand_project.exists() and (cand_project == root or cand_project.is_relative_to(root)):
+                        resolved_path = cand_project
+                        break
+
+            # 4. Fallback to candidate inside primary root
+            if resolved_path is None:
+                primary_root = allowed[0]
+                resolved_path = (primary_root / raw_path).resolve()
         else:
             resolved_path = raw_path.resolve()
 

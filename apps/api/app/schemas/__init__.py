@@ -16,6 +16,15 @@ from app.schemas.graph import (
     GraphNodeResponse,
 )
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.tracing import (
+    EntryPointResponse,
+    ExecutionTraceResponse,
+    ProjectTraceRequest,
+    ProjectTraceResponse,
+    TraceMetricsResponse,
+    TraceStepResponse,
+    TraceTreeResponse,
+)
 
 __all__ = [
     "PaginationParams",
@@ -36,4 +45,11 @@ __all__ = [
     "GraphEdgeResponse",
     "GraphMetricsResponse",
     "DependencyGraphResponse",
+    "ProjectTraceRequest",
+    "EntryPointResponse",
+    "TraceStepResponse",
+    "TraceTreeResponse",
+    "TraceMetricsResponse",
+    "ExecutionTraceResponse",
+    "ProjectTraceResponse",
 ]

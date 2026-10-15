@@ -15,13 +15,6 @@ from engines.ingestion.models import IngestionConfig
 from engines.ingestion.scanner import CodebaseScanner
 
 
-@pytest.fixture
-async def async_client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-
-
 @pytest.mark.asyncio
 async def test_ingest_project_success(async_client, tmp_path: Path):
     """Verify POST /api/v1/projects/{project_id}/ingest successfully ingests a local repository."""

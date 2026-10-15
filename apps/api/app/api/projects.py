@@ -1,7 +1,7 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -10,10 +10,12 @@ from app.schemas.graph import DependencyGraphResponse
 from app.schemas.ingestion import IngestionSummaryResponse
 from app.schemas.parsing import ProjectParseSummaryResponse
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.tracing import ProjectTraceRequest, ProjectTraceResponse
 from app.services.graph import GraphService
 from app.services.ingestion import IngestionService
 from app.services.parsing import ParsingService
 from app.services.projects import ProjectService
+from app.services.tracing import TracingService
 
 router = APIRouter()
 
@@ -177,3 +179,19 @@ async def generate_project_graph(
     """Generate semantic dependency graph with import, containment, and inheritance edges."""
     service = GraphService(session)
     return await service.build_project_graph(project_id)
+
+
+@router.post(
+    "/{project_id}/trace",
+    response_model=ProjectTraceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Trace execution flow or find execution paths in project",
+)
+async def trace_project(
+    project_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    trace_req: Optional[ProjectTraceRequest] = Body(default=None),
+) -> ProjectTraceResponse:
+    """Trace execution flow from entrypoints/symbols or discover paths between source and target."""
+    service = TracingService(session)
+    return await service.trace_project(project_id, request=trace_req)

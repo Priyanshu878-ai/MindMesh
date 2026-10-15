@@ -16,6 +16,9 @@ def test_settings_defaults():
     assert settings.postgres_password == "mindmesh_secret"
     assert settings.database_url == "postgresql://mindmesh:mindmesh_secret@localhost:5432/mindmesh"
     assert settings.async_database_url == "postgresql+psycopg://mindmesh:mindmesh_secret@localhost:5432/mindmesh"
+    assert settings.repositories_root == "data/repositories"
+    assert settings.project_root.exists()
+    assert settings.get_repositories_dir() == (settings.project_root / "data/repositories").resolve()
 
 
 def test_settings_custom_values():
@@ -31,6 +34,7 @@ def test_settings_custom_values():
         postgres_db="custom_db",
         postgres_user="custom_user",
         postgres_password="custom_password",
+        repositories_root="custom/repos",
         _env_file=None,
     )
     assert settings.app_name == "MindMesh Test"
@@ -46,3 +50,5 @@ def test_settings_custom_values():
     assert settings.postgres_password == "custom_password"
     assert settings.database_url == "postgresql://custom_user:custom_password@db.internal:5433/custom_db"
     assert settings.async_database_url == "postgresql+psycopg://custom_user:custom_password@db.internal:5433/custom_db"
+    assert settings.repositories_root == "custom/repos"
+    assert settings.get_repositories_dir() == (settings.project_root / "custom/repos").resolve()

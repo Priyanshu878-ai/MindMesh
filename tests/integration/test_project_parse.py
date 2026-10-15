@@ -10,13 +10,6 @@ from app.main import app
 from app.models.project import Project
 
 
-@pytest.fixture
-async def async_client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-
-
 @pytest.mark.asyncio
 async def test_parse_project_success(async_client, tmp_path: Path):
     """Verify POST /api/v1/projects/{project_id}/parse extracts symbols and imports from an indexed project."""
