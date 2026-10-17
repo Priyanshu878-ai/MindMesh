@@ -157,3 +157,99 @@ export async function triggerIngestion(
 
   return response.json();
 }
+
+/**
+ * Upload a ZIP archive containing a codebase project.
+ *
+ * @param file The ZIP File object to upload
+ * @param name Optional custom project name
+ * @param autoIngest Whether to immediately ingest & index the codebase (default true)
+ * @param baseUrl Optional override for API base URL
+ */
+export async function uploadZipProject(
+  file: File,
+  name?: string,
+  autoIngest: boolean = true,
+  baseUrl: string = DEFAULT_API_BASE
+): Promise<ProjectSummary> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/api/v1/projects/upload-zip`;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  if (name && name.trim()) {
+    formData.append('name', name.trim());
+  }
+  formData.append('auto_ingest', String(autoIngest));
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const errBody = await response.json();
+      if (errBody && typeof errBody.detail === 'string') {
+        detail = errBody.detail;
+      }
+    } catch {
+      // Keep statusText fallback
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  return response.json();
+}
+
+/**
+ * Import a public GitHub repository by URL.
+ *
+ * @param githubUrl The public GitHub repository URL (e.g. https://github.com/owner/repo)
+ * @param name Optional custom project name
+ * @param autoIngest Whether to immediately ingest & index the codebase (default true)
+ * @param baseUrl Optional override for API base URL
+ */
+export async function importGithubProject(
+  githubUrl: string,
+  name?: string,
+  autoIngest: boolean = true,
+  baseUrl: string = DEFAULT_API_BASE
+): Promise<ProjectSummary> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/api/v1/projects/import-github`;
+
+  const payload: { url: string; name?: string; auto_ingest: boolean } = {
+    url: githubUrl.trim(),
+    auto_ingest: autoIngest,
+  };
+  if (name && name.trim()) {
+    payload.name = name.trim();
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const errBody = await response.json();
+      if (errBody && typeof errBody.detail === 'string') {
+        detail = errBody.detail;
+      }
+    } catch {
+      // Keep statusText fallback
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  return response.json();
+}
