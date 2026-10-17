@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     allowed_repo_roots: list[str] = []
     repositories_root: str = "data/repositories"
 
+    # ZIP upload and extraction configuration
+    max_zip_upload_size_bytes: int = 50 * 1024 * 1024  # 50 MB
+    max_zip_extracted_size_bytes: int = 200 * 1024 * 1024  # 200 MB
+    max_zip_file_count: int = 10_000
+    max_zip_single_file_size_bytes: int = 20 * 1024 * 1024  # 20 MB
+    max_zip_compression_ratio: float = 100.0
+
     @property
     def project_root(self) -> Path:
         """The absolute canonical root directory of the MindMesh workspace."""

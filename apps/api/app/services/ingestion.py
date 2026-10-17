@@ -1,18 +1,27 @@
 import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
+import shutil
 from typing import List, Optional
 import uuid
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings, settings as app_settings
 from app.models.project import Project
 from app.schemas.ingestion import DiscoveredFileResponse, IngestionSummaryResponse
+from app.schemas.project import ProjectCreate
 from app.services.projects import ProjectService
-from engines.ingestion import CodebaseScanner, IngestionConfig
+from engines.ingestion import (
+    ArchiveConfig,
+    ArchiveExtractionError,
+    CodebaseScanner,
+    IngestionConfig,
+    SafeZipExtractor,
+)
+
 
 
 class IngestionService:
@@ -277,3 +286,119 @@ class IngestionService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Ingestion scan failed: {str(exc)}",
             )
+
+    async def upload_zip_project(
+        self,
+        file: UploadFile,
+        name: Optional[str] = None,
+        auto_ingest: bool = True,
+        request: Optional[Request] = None,
+    ) -> Project:
+        """Validate, safely extract, and register a project from an uploaded ZIP archive.
+
+        Security protections:
+        - Rejects non-ZIP files and corrupted archives.
+        - Enforces resource limits (archive size, total uncompressed size, single file size, entry count).
+        - Prevents zip bombs by enforcing compression ratio limits.
+        - Defends against Zip Slip by rejecting traversal and absolute paths.
+        - Rejects symlinks, special files, and path collisions.
+        - Extracts to a unique directory under the managed repositories workspace.
+        - Cleans up partial extractions on any validation or extraction failure.
+        - Seamlessly triggers initial codebase indexing if auto_ingest is enabled.
+        """
+        if not file.filename or not file.filename.lower().endswith(".zip"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only .zip archives are supported",
+            )
+
+        # Check Content-Length header early if provided in request or multipart part
+        cl_str: Optional[str] = None
+        if request and "content-length" in request.headers:
+            cl_str = request.headers["content-length"]
+        elif file.headers and "content-length" in file.headers:
+            cl_str = file.headers["content-length"]
+
+        if cl_str:
+            try:
+                if int(cl_str) > self.settings.max_zip_upload_size_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Upload size exceeds maximum allowed limit of {self.settings.max_zip_upload_size_bytes} bytes",
+                    )
+            except ValueError:
+                pass
+
+        # Derive project name
+        if name and name.strip():
+            project_name = name.strip()
+        else:
+            raw_stem = Path(file.filename).stem.strip()
+            project_name = raw_stem if raw_stem else "uploaded-project"
+
+        # Determine target workspace root
+        if self.allowed_roots:
+            base_workspace = self.allowed_roots[0]
+        else:
+            base_workspace = self.settings.get_repositories_dir(create=True)
+
+        safe_slug = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in project_name)[:40].strip("_")
+        if not safe_slug:
+            safe_slug = "project"
+        unique_folder = f"{safe_slug}-{uuid.uuid4().hex[:8]}"
+        dest_dir = base_workspace / unique_folder
+
+        archive_config = ArchiveConfig(
+            max_archive_size_bytes=self.settings.max_zip_upload_size_bytes,
+            max_total_uncompressed_size_bytes=self.settings.max_zip_extracted_size_bytes,
+            max_file_count=self.settings.max_zip_file_count,
+            max_single_file_size_bytes=self.settings.max_zip_single_file_size_bytes,
+            max_compression_ratio=self.settings.max_zip_compression_ratio,
+        )
+        extractor = SafeZipExtractor(config=archive_config)
+
+        try:
+            await asyncio.to_thread(extractor.extract, file.file, dest_dir)
+        except ArchiveExtractionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Archive extraction failed: {str(exc)}",
+            )
+        except Exception as exc:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to process archive: {str(exc)}",
+            )
+
+        project_service = ProjectService(self.session)
+        project_in = ProjectCreate(
+            name=project_name,
+            source_type="local",
+            source_url=str(dest_dir.resolve()),
+            status="pending",
+        )
+        try:
+            project = await project_service.create_project(project_in)
+        except Exception:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
+            raise
+
+        if auto_ingest:
+            try:
+                await self.ingest_project(project.id)
+                refreshed = await project_service.get_project(project.id)
+                if refreshed is not None:
+                    project = refreshed
+            except Exception:
+                # Cleanup project record and extracted directory on indexing failure
+                try:
+                    await project_service.delete_project(project)
+                except Exception:
+                    pass
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir, ignore_errors=True)
+                raise
+        return project

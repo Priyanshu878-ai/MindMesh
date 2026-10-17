@@ -1,7 +1,19 @@
 from typing import Annotated, Optional
 import uuid
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -34,6 +46,28 @@ async def create_project(
     service = ProjectService(session)
     project = await service.create_project(project_in)
     return ProjectResponse.model_validate(project)
+
+
+@router.post(
+    "/upload-zip",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload and ingest a project from a ZIP archive",
+)
+async def upload_zip_project(
+    request: Request,
+    file: Annotated[UploadFile, File(description="ZIP archive containing project source code")],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    name: Annotated[Optional[str], Form(description="Optional custom project name")] = None,
+    auto_ingest: Annotated[bool, Form(description="Whether to immediately ingest and index the extracted codebase")] = True,
+) -> ProjectResponse:
+    """Upload a ZIP archive, safely extract to managed workspace, and register project."""
+    service = IngestionService(session)
+    project = await service.upload_zip_project(
+        file=file, name=name, auto_ingest=auto_ingest, request=request
+    )
+    return ProjectResponse.model_validate(project)
+
 
 
 @router.get(

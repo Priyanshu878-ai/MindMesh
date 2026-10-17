@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 
@@ -52,3 +53,23 @@ class IngestionSummary:
     files: List[FileDescriptor] = field(default_factory=list)
     skipped_files: List[SkippedFile] = field(default_factory=list)
     duration_ms: float = 0.0
+
+
+@dataclass
+class ArchiveConfig:
+    """Security thresholds and limits for ZIP archive validation and extraction."""
+
+    max_archive_size_bytes: int = 50 * 1024 * 1024  # 50 MB
+    max_total_uncompressed_size_bytes: int = 200 * 1024 * 1024  # 200 MB
+    max_file_count: int = 10_000
+    max_single_file_size_bytes: int = 20 * 1024 * 1024  # 20 MB
+    max_compression_ratio: float = 100.0
+
+
+@dataclass(frozen=True)
+class ArchiveExtractionResult:
+    """Summary of safe archive extraction output."""
+
+    destination_path: Path
+    extracted_files_count: int
+    total_uncompressed_bytes: int

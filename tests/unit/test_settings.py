@@ -19,6 +19,12 @@ def test_settings_defaults():
     assert settings.repositories_root == "data/repositories"
     assert settings.project_root.exists()
     assert settings.get_repositories_dir() == (settings.project_root / "data/repositories").resolve()
+    assert settings.max_zip_upload_size_bytes == 50 * 1024 * 1024
+    assert settings.max_zip_extracted_size_bytes == 200 * 1024 * 1024
+    assert settings.max_zip_file_count == 10_000
+    assert settings.max_zip_single_file_size_bytes == 20 * 1024 * 1024
+    assert settings.max_zip_compression_ratio == 100.0
+
 
 
 def test_settings_custom_values():
