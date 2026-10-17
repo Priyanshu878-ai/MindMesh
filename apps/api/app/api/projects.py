@@ -21,7 +21,12 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.graph import DependencyGraphResponse
 from app.schemas.ingestion import IngestionSummaryResponse
 from app.schemas.parsing import ProjectParseSummaryResponse
-from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectGitHubImport,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from app.schemas.tracing import ProjectTraceRequest, ProjectTraceResponse
 from app.services.graph import GraphService
 from app.services.ingestion import IngestionService
@@ -65,6 +70,26 @@ async def upload_zip_project(
     service = IngestionService(session)
     project = await service.upload_zip_project(
         file=file, name=name, auto_ingest=auto_ingest, request=request
+    )
+    return ProjectResponse.model_validate(project)
+
+
+@router.post(
+    "/import-github",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import and ingest a project from a public GitHub repository",
+)
+async def import_github_project(
+    import_in: ProjectGitHubImport,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectResponse:
+    """Import a public GitHub repository, safely clone to managed workspace, and register project."""
+    service = IngestionService(session)
+    project = await service.import_github_project(
+        url=import_in.url,
+        name=import_in.name,
+        auto_ingest=import_in.auto_ingest,
     )
     return ProjectResponse.model_validate(project)
 

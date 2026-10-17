@@ -15,7 +15,12 @@ from app.schemas.graph import (
     GraphMetricsResponse,
     GraphNodeResponse,
 )
-from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectGitHubImport,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from app.schemas.tracing import (
     EntryPointResponse,
     ExecutionTraceResponse,
@@ -30,6 +35,7 @@ __all__ = [
     "PaginationParams",
     "PaginatedResponse",
     "ProjectCreate",
+    "ProjectGitHubImport",
     "ProjectUpdate",
     "ProjectResponse",
     "DiscoveredFileResponse",

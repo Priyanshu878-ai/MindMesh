@@ -103,8 +103,8 @@ async def test_ingest_unsupported_source_type(async_client):
         "/api/v1/projects",
         json={
             "name": f"Remote Project {uuid.uuid4().hex[:6]}",
-            "source_type": "github",
-            "source_url": "https://github.com/example/repo",
+            "source_type": "gitlab",
+            "source_url": "https://gitlab.com/example/repo",
         },
     )
     assert create_resp.status_code == 201
@@ -113,7 +113,7 @@ async def test_ingest_unsupported_source_type(async_client):
     try:
         resp = await async_client.post(f"/api/v1/projects/{proj_id}/ingest")
         assert resp.status_code == 400
-        assert "Only 'local' source_type is supported" in resp.json()["detail"]
+        assert "source types are supported" in resp.json()["detail"]
 
         # Status remains pending
         get_resp = await async_client.get(f"/api/v1/projects/{proj_id}")

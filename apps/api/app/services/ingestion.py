@@ -18,8 +18,12 @@ from engines.ingestion import (
     ArchiveConfig,
     ArchiveExtractionError,
     CodebaseScanner,
+    GitCloneConfig,
+    GitCloneError,
     IngestionConfig,
+    SafeGitCloner,
     SafeZipExtractor,
+    validate_github_url,
 )
 
 
@@ -145,12 +149,37 @@ class IngestionService:
 
         return resolved_path
 
+    def resolve_project_path(self, project: Project) -> Path:
+        """Resolve and validate the local directory path for a project against trusted roots.
+
+        Supports both 'local' projects (resolved via project.source_url) and 'github'
+        projects (resolved via the dedicated workspace directory gh-{project.id} or source_url).
+        """
+        if project.source_type not in ("local", "github"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only 'local' and 'github' source types are supported for codebase ingestion, got '{project.source_type}'",
+            )
+
+        if project.source_type == "github":
+            # If source_url is a GitHub URL (or not a local directory), use managed workspace directory
+            if not project.source_url or project.source_url.startswith(("http://", "https://")):
+                base_workspace = (
+                    self.allowed_roots[0]
+                    if self.allowed_roots
+                    else self.settings.get_repositories_dir(create=True)
+                )
+                gh_dir = (base_workspace / f"gh-{project.id}").resolve()
+                return self.resolve_trusted_path(str(gh_dir))
+
+        return self.resolve_trusted_path(project.source_url)
+
     async def ingest_project(
         self,
         project_id: uuid.UUID,
         config: Optional[IngestionConfig] = None,
     ) -> IngestionSummaryResponse:
-        """Execute ingestion scan for a local project and update status.
+        """Execute ingestion scan for a project and update status.
 
         Status transitions:
             pending/indexed/failed -> ingesting -> indexed (on complete success)
@@ -158,7 +187,7 @@ class IngestionService:
 
         Raises:
             HTTPException (404): If project does not exist.
-            HTTPException (400): If project source_type is not 'local' or path is invalid.
+            HTTPException (400): If project source_type is unsupported or path is invalid.
             HTTPException (409): If project is already currently ingesting.
             HTTPException (422): If scan is truncated due to limit thresholds.
             HTTPException (500): If scan encounters unhandled runtime failure.
@@ -172,10 +201,10 @@ class IngestionService:
                 detail="Project not found",
             )
 
-        if project.source_type != "local":
+        if project.source_type not in ("local", "github"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Only 'local' source_type is supported for codebase ingestion, got '{project.source_type}'",
+                detail=f"Only 'local' and 'github' source types are supported for codebase ingestion, got '{project.source_type}'",
             )
 
         # Preliminary concurrency check
@@ -185,8 +214,8 @@ class IngestionService:
                 detail="Project ingestion is already in progress",
             )
 
-        # Validate local path before altering project state (leaves status unchanged on invalid paths)
-        project_path = self.resolve_trusted_path(project.source_url)
+        # Validate path before altering project state (leaves status unchanged on invalid paths)
+        project_path = self.resolve_project_path(project)
 
         # Atomic database-level state claiming:
         # Prevents race conditions from simultaneous requests claiming the same project.
@@ -401,4 +430,106 @@ class IngestionService:
                 if dest_dir.exists():
                     shutil.rmtree(dest_dir, ignore_errors=True)
                 raise
+        return project
+
+    async def import_github_project(
+        self,
+        url: str,
+        name: Optional[str] = None,
+        auto_ingest: bool = True,
+    ) -> Project:
+        """Validate GitHub URL, clone into managed workspace, and register project.
+
+        Security protections:
+        - Validates GitHub URL against strict allowlist schema.
+        - Rejects credentials, traversal, command injection, non-https schemes, and unsupported hosts.
+        - Executes git clone using argument lists with shell=False.
+        - Clones shallow (--depth 1 --single-branch --no-tags) with disabled interactive prompts.
+        - Enforces timeout, file count, and repository size limits.
+        - Detects and rejects escaping symlinks.
+        - Clones into a unique directory in the managed repository workspace.
+        - Performs atomic cleanup of directory and database record on any failure.
+        - Triggers initial codebase indexing if auto_ingest is enabled.
+        """
+        try:
+            canonical_url, owner, repo = validate_github_url(url)
+        except GitCloneError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
+
+        # Derive project name
+        if name and name.strip():
+            project_name = name.strip()
+        else:
+            project_name = repo
+
+        project_id = uuid.uuid4()
+
+        # Determine target workspace root
+        if self.allowed_roots:
+            base_workspace = self.allowed_roots[0]
+        else:
+            base_workspace = self.settings.get_repositories_dir(create=True)
+
+        dest_dir = (base_workspace / f"gh-{project_id}").resolve()
+
+        clone_config = GitCloneConfig(
+            clone_timeout_seconds=self.settings.git_clone_timeout_seconds,
+            max_clone_size_bytes=self.settings.max_git_clone_size_bytes,
+            max_file_count=self.settings.max_git_clone_file_count,
+        )
+        cloner = SafeGitCloner(config=clone_config)
+
+        try:
+            await asyncio.to_thread(cloner.clone, canonical_url, dest_dir)
+        except GitCloneError as exc:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"GitHub clone failed: {str(exc)}",
+            )
+        except Exception as exc:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to clone repository: {str(exc)}",
+            )
+
+        project_service = ProjectService(self.session)
+        project = Project(
+            id=project_id,
+            name=project_name,
+            source_type="github",
+            source_url=canonical_url,
+            status="pending",
+        )
+        try:
+            self.session.add(project)
+            await self.session.commit()
+            await self.session.refresh(project)
+        except Exception:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
+            raise
+
+        if auto_ingest:
+            try:
+                await self.ingest_project(project.id)
+                refreshed = await project_service.get_project(project.id)
+                if refreshed is not None:
+                    project = refreshed
+            except Exception:
+                # Cleanup project record and cloned directory on indexing failure
+                try:
+                    await project_service.delete_project(project)
+                except Exception:
+                    pass
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir, ignore_errors=True)
+                raise
+
         return project

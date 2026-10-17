@@ -131,10 +131,10 @@ class ParsingService:
                 detail=f"Project must be indexed before parsing. Current status: '{project.status}'",
             )
 
-        if project.source_type != "local":
+        if project.source_type not in ("local", "github"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Only 'local' source_type is supported for codebase parsing, got '{project.source_type}'",
+                detail=f"Only 'local' and 'github' source types are supported for codebase parsing, got '{project.source_type}'",
             )
 
         # Validate path containment against trusted roots
@@ -143,7 +143,7 @@ class ParsingService:
             settings=self.settings,
             allowed_roots=self.allowed_roots,
         )
-        project_path = ingestion_service.resolve_trusted_path(project.source_url)
+        project_path = ingestion_service.resolve_project_path(project)
 
         # Discover source files within the project
         scanner = CodebaseScanner()

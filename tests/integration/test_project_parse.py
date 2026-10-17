@@ -141,8 +141,8 @@ async def test_parse_project_unsupported_source_type(async_client, tmp_path: Pat
         "/api/v1/projects",
         json={
             "name": f"Remote Project {uuid.uuid4().hex[:6]}",
-            "source_type": "github",
-            "source_url": "https://github.com/example/repo",
+            "source_type": "gitlab",
+            "source_url": "https://gitlab.com/example/repo",
         },
     )
     assert create_resp.status_code == 201
@@ -158,7 +158,7 @@ async def test_parse_project_unsupported_source_type(async_client, tmp_path: Pat
     try:
         resp = await async_client.post(f"/api/v1/projects/{proj_id}/parse")
         assert resp.status_code == 400
-        assert "Only 'local' source_type is supported" in resp.json()["detail"]
+        assert "source types are supported" in resp.json()["detail"]
 
     finally:
         await async_client.delete(f"/api/v1/projects/{proj_id}")

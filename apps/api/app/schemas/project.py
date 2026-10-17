@@ -48,6 +48,47 @@ class ProjectCreate(ProjectBase):
     pass
 
 
+class ProjectGitHubImport(BaseModel):
+    """Payload schema for importing a project from a public GitHub repository."""
+
+    url: str = Field(
+        ...,
+        min_length=1,
+        max_length=1024,
+        description="Public GitHub repository URL (e.g. https://github.com/owner/repo)",
+    )
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Optional custom project name",
+    )
+    auto_ingest: bool = Field(
+        default=True,
+        description="Whether to immediately ingest and index the repository codebase",
+    )
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_url(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_stripped = v.strip()
+            if not v_stripped:
+                raise ValueError("URL cannot be blank or whitespace-only")
+            return v_stripped
+        return v
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v_stripped = v.strip()
+            return v_stripped if v_stripped else None
+        return v
+
+
 class ProjectUpdate(BaseModel):
     """Payload schema for partial project update (PATCH)."""
 

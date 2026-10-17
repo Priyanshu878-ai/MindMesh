@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     max_zip_single_file_size_bytes: int = 20 * 1024 * 1024  # 20 MB
     max_zip_compression_ratio: float = 100.0
 
+    # GitHub repository cloning configuration
+    git_clone_timeout_seconds: int = 60
+    max_git_clone_size_bytes: int = 100 * 1024 * 1024  # 100 MB
+    max_git_clone_file_count: int = 10_000
+
     @property
     def project_root(self) -> Path:
         """The absolute canonical root directory of the MindMesh workspace."""

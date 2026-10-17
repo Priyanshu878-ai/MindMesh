@@ -6,6 +6,12 @@ from engines.ingestion.filters import (
     detect_language,
     is_binary_file,
 )
+from engines.ingestion.git import (
+    GitCloneConfig,
+    GitCloneError,
+    SafeGitCloner,
+    validate_github_url,
+)
 from engines.ingestion.models import (
     ArchiveConfig,
     ArchiveExtractionResult,
@@ -24,11 +30,15 @@ __all__ = [
     "DEFAULT_IGNORED_DIRS",
     "DEFAULT_IGNORED_FILES",
     "FileDescriptor",
+    "GitCloneConfig",
+    "GitCloneError",
     "GitIgnoreFilter",
     "IngestionConfig",
     "IngestionSummary",
+    "SafeGitCloner",
     "SafeZipExtractor",
     "SkippedFile",
     "detect_language",
     "is_binary_file",
+    "validate_github_url",
 ]
